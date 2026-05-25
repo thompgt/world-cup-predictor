@@ -51,13 +51,14 @@ def predict_match(home, away, date, model, rankings, results):
     # features = ['rank_diff', 'average_rank', 'point_diff', 'is_friendly', 'goals_rolling_diff']
     
     def get_features(h_r, h_p, h_rl, a_r, a_p, a_rl):
-        return pd.DataFrame([{
+        df = pd.DataFrame([{
             'rank_diff': h_r - a_r,
             'average_rank': (h_r + a_r) / 2,
             'point_diff': h_p - a_p,
             'is_friendly': 0, # WC matches are not friendly
             'goals_rolling_diff': h_rl - a_rl
         }])
+        return df.fillna(0) # Simple fallback
 
     # The 2022 methodology predicts Home vs Away AND Away vs Home, then takes the average
     f1 = get_features(h_rank, h_pts, h_roll, a_rank, a_pts, a_roll)
