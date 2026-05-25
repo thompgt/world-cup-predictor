@@ -133,13 +133,30 @@ def run_simulation():
     wc_start_date = pd.to_datetime('2026-06-11')
     
     group_results = {}
+    third_places = []
+    
     for i, g in enumerate(standardized_groups):
         g_name = chr(65 + i)
         winners, standings = simulate_group(g_name, g, wc_start_date, model, rankings, results)
         group_results[g_name] = {'winners': winners, 'standings': standings}
         print(f"Group {g_name} Finished: 1st: {winners[0]}, 2nd: {winners[1]}, 3rd: {winners[2]}")
         
-    return group_results
+        # Track 3rd place for best-8 selection
+        third_team = winners[2]
+        third_places.append({
+            'team': third_team,
+            'group': g_name,
+            'points': standings[third_team]['points'],
+            'prob_sum': standings[third_team]['prob_sum']
+        })
+        
+    # Select 8 best 3rd places
+    best_thirds = sorted(third_places, key=lambda x: (x['points'], x['prob_sum']), reverse=True)[:8]
+    best_third_teams = [x['team'] for x in best_thirds]
+    
+    print(f"\nBest 8 3rd-place teams: {', '.join(best_third_teams)}")
+    
+    return group_results, best_third_teams
 
 if __name__ == "__main__":
     run_simulation()
