@@ -13,6 +13,12 @@ def filter_data():
     results['date'] = pd.to_datetime(results['date'])
     rankings['date'] = pd.to_datetime(rankings['date'])
     
+    # Calculate Rank if missing
+    if 'rank' not in rankings.columns:
+        print("Calculating rank from total_points...")
+        rankings = rankings.sort_values(['date', 'total_points'], ascending=[True, False])
+        rankings['rank'] = rankings.groupby('date')['total_points'].rank(ascending=False, method='min')
+    
     # Define 2026 Cycle start (Day after 2022 World Cup Final)
     cycle_start = pd.to_datetime('2022-12-19')
     
