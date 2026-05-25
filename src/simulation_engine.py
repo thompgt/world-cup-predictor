@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import pickle
+import os
 
 # Standardization mapping (same as used before)
 mapping = {
@@ -103,11 +104,20 @@ def simulate_group(group_name, teams, date, model, rankings, results):
     return sorted_teams, standings
 
 def run_simulation():
-    with open('world-cup-predictor/models/optimized_gb.pkl', 'rb') as f:
+    # Detect if we are in src/ or project root or notebooks/
+    current_dir = os.getcwd()
+    if 'notebooks' in current_dir:
+        base_path = '..'
+    elif 'src' in current_dir:
+        base_path = '..'
+    else:
+        base_path = 'world-cup-predictor'
+
+    with open(f'{base_path}/models/optimized_gb.pkl', 'rb') as f:
         model = pickle.load(f)
     
-    rankings = pd.read_csv('world-cup-predictor/data/processed/rankings_2026_cycle.csv')
-    results = pd.read_csv('world-cup-predictor/data/processed/results_2026_cycle.csv')
+    rankings = pd.read_csv(f'{base_path}/data/processed/rankings_2026_cycle.csv')
+    results = pd.read_csv(f'{base_path}/data/processed/results_2026_cycle.csv')
     rankings['date'] = pd.to_datetime(rankings['date'])
     results['date'] = pd.to_datetime(results['date'])
     
