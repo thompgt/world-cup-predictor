@@ -156,6 +156,56 @@ def run_simulation():
     
     print(f"\nBest 8 3rd-place teams: {', '.join(best_third_teams)}")
     
+    # 3. Knockout Stage: Round of 32
+    # We'll create a simplified R32 bracket: 
+    # 12 Group Winners (G1..G12)
+    # 12 Runners-up (R1..R12)
+    # 8 Best 3rds (T1..T8)
+    
+    group_winners = [group_results[g]['winners'][0] for g in 'ABCDEFGHIJKL']
+    group_runners_up = [group_results[g]['winners'][1] for g in 'ABCDEFGHIJKL']
+    
+    # R32 bracket (simplified for simulation)
+    # Let's just pair them: Winner vs 3rd, Runner vs Runner, etc.
+    bracket = []
+    # G-Winners vs 3rds (8 matches)
+    for i in range(8):
+        bracket.append((group_winners[i], best_third_teams[i]))
+    # Remaining G-Winners vs Runners-up (4 matches)
+    for i in range(8, 12):
+        bracket.append((group_winners[i], group_runners_up[i-8]))
+    # Remaining Runners-up vs Runners-up (4 matches)
+    for i in range(4, 12, 2):
+        bracket.append((group_runners_up[i], group_runners_up[i+1]))
+        
+    def simulate_knockout(matchup, date, model, rankings, results):
+        p = predict_match(matchup[0], matchup[1], date, model, rankings, results)
+        return matchup[0] if p > 0.5 else matchup[1]
+
+    print("\n--- Round of 32 ---")
+    next_round = []
+    for m in bracket:
+        winner = simulate_knockout(m, wc_start_date + pd.Timedelta(days=20), model, rankings, results)
+        next_round.append(winner)
+        print(f"{m[0]} vs {m[1]} -> Winner: {winner}")
+
+    # Subsequent rounds
+    rounds = ["Round of 16", "Quarter-finals", "Semi-finals", "Final"]
+    current_teams = next_round
+    
+    for round_name in rounds:
+        print(f"\n--- {round_name} ---")
+        winners = []
+        for i in range(0, len(current_teams), 2):
+            m = (current_teams[i], current_teams[i+1])
+            winner = simulate_knockout(m, wc_start_date + pd.Timedelta(days=30), model, rankings, results)
+            winners.append(winner)
+            print(f"{m[0]} vs {m[1]} -> Winner: {winner}")
+        current_teams = winners
+        if len(current_teams) == 1:
+            print(f"\nWORLD CUP WINNER: {current_teams[0]}")
+            break
+
     return group_results, best_third_teams
 
 if __name__ == "__main__":
