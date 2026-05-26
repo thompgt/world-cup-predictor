@@ -2,13 +2,18 @@ import pandas as pd
 import numpy as np
 import os
 
+
+def _repo_root():
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
 def engineer_high_signal_features():
     # Load data
-    results = pd.read_csv('world-cup-predictor/data/processed/results_2026_cycle.csv')
+    base_path = _repo_root()
+    results = pd.read_csv(os.path.join(base_path, 'data', 'processed', 'results_2026_cycle.csv'))
     # Use Live Rankings for the latest indicator, but merge with historical for temporal depth
-    rankings_live = pd.read_csv('world-cup-predictor/data/fifa_ranking_live.csv')
-    rankings_hist = pd.read_csv('world-cup-predictor/data/processed/rankings_2026_cycle.csv')
-    squad_ratings = pd.read_csv('world-cup-predictor/data/processed/squad_ratings.csv')
+    rankings_live = pd.read_csv(os.path.join(base_path, 'data', 'fifa_ranking_live.csv'))
+    rankings_hist = pd.read_csv(os.path.join(base_path, 'data', 'processed', 'rankings_2026_cycle.csv'))
+    squad_ratings = pd.read_csv(os.path.join(base_path, 'data', 'processed', 'squad_ratings.csv'))
     
     results['date'] = pd.to_datetime(results['date'])
     rankings_hist['date'] = pd.to_datetime(rankings_hist['date'])
@@ -81,8 +86,8 @@ def engineer_high_signal_features():
         team_history[a_team].append(get_pts(row['away_score'], row['home_score']))
 
     final_df = pd.DataFrame(signal_rows)
-    os.makedirs('world-cup-predictor/data/features', exist_ok=True)
-    final_df.to_csv('world-cup-predictor/data/features/high_signal_features.csv', index=False)
+    os.makedirs(os.path.join(base_path, 'data', 'features'), exist_ok=True)
+    final_df.to_csv(os.path.join(base_path, 'data', 'features', 'high_signal_features.csv'), index=False)
     print("High-signal features saved.")
 
 if __name__ == "__main__":

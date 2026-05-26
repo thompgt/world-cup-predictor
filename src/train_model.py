@@ -5,8 +5,13 @@ from sklearn.metrics import classification_report, accuracy_score
 import pickle
 import os
 
+
+def _repo_root():
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
 def train_baseline():
-    data = pd.read_csv('world-cup-predictor/data/features/final_features.csv')
+    base_path = _repo_root()
+    data = pd.read_csv(os.path.join(base_path, 'data', 'features', 'final_features.csv'))
     
     # Define features and target
     features = ['rank_diff', 'average_rank', 'point_diff', 'is_friendly', 'goals_rolling_diff']
@@ -32,8 +37,8 @@ def train_baseline():
     print(classification_report(y_test, y_pred))
     
     # Save model
-    os.makedirs('world-cup-predictor/models', exist_ok=True)
-    with open('world-cup-predictor/models/baseline_gb.pkl', 'wb') as f:
+    os.makedirs(os.path.join(base_path, 'models'), exist_ok=True)
+    with open(os.path.join(base_path, 'models', 'baseline_gb.pkl'), 'wb') as f:
         pickle.dump(model, f)
     
     print("Baseline model saved.")

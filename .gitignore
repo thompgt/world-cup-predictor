@@ -1,0 +1,15 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Notebook state
+.ipynb_checkpoints/
+
+# Local environments
+.venv/
+venv/
+env/
+
+# OS files
+Thumbs.db
+.DS_Store

@@ -192,14 +192,38 @@ def simulate_group(teams, date, model, rankings, results, squad_dict, roster_map
     return sorted_teams, standings, scorer_counts, match_events
 
 def run_simulation():
-    current_dir = os.getcwd()
-    base_path = '..' if 'notebooks' in current_dir or 'src' in current_dir else 'world-cup-predictor'
+    # Resolve repository root reliably based on this file's location
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    base_path = repo_root
 
-    model_path = f'{base_path}/models/high_signal_gb.pkl'
-    if not os.path.exists(model_path): model_path = f'{base_path}/models/weighted_gb.pkl'
-        
-    with open(model_path, 'rb') as f:
-        model = pickle.load(f)
+    model_path = os.path.join(base_path, 'models', 'high_signal_gb.pkl')
+    if not os.path.exists(model_path):
+        model_path = os.path.join(base_path, 'models', 'weighted_gb.pkl')
+
+    model = None
+    if os.path.exists(model_path):
+        try:
+            with open(model_path, 'rb') as f:
+                model = pickle.load(f)
+        except Exception:
+            model = None
+
+    # If model couldn't be loaded, attempt to train a high-signal model if training code exists
+    if model is None:
+        try:
+            # Import training routine dynamically to avoid heavy imports at module load
+            try:
+                from train_high_signal import train_high_signal_model
+            except Exception:
+                from src.train_high_signal import train_high_signal_model
+            print('Model not found or failed to load; attempting to train high-signal model...')
+            train_high_signal_model()
+            if os.path.exists(model_path):
+                with open(model_path, 'rb') as f:
+                    model = pickle.load(f)
+        except Exception as e:
+            # Provide clear guidance instead of a random/dummy model
+            raise RuntimeError(f"Model missing and automatic training failed: {e}.\nPlease run 'python src/train_high_signal.py' to train and save the model to models/high_signal_gb.pkl")
     
     # Load LIVE rankings
     rankings = pd.read_csv(f'{base_path}/data/fifa_ranking_live.csv')
