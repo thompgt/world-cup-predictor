@@ -54,7 +54,7 @@ def engineer_high_signal_features():
         h_form = get_form(team_history[h_team])
         a_form = get_form(team_history[a_team])
         
-        # Construct the 6-feature set (Plus target)
+        # Construct the high-signal feature set with Interaction terms
         feat_row = {
             'date': date,
             'home_team': h_team,
@@ -65,6 +65,9 @@ def engineer_high_signal_features():
             'h_inv_rank': h_inv_rank,
             'h_squad_rating': h_squad,
             'h_recent_form': h_form,
+            # Interaction terms to amplify squad quality signal
+            'squad_rank_interaction': h_squad * h_inv_rank,
+            'rating_delta_form': (h_squad - a_squad) * h_form,
             'target': int(row['home_score'] > row['away_score'])
         }
         signal_rows.append(feat_row)

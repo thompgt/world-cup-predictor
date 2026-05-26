@@ -6,7 +6,7 @@ import os
 
 def train_high_signal_model():
     data = pd.read_csv('world-cup-predictor/data/features/high_signal_features.csv')
-    features = ['rank_diff_inv', 'rating_diff', 'form_diff', 'h_inv_rank', 'h_squad_rating', 'h_recent_form']
+    features = ['rank_diff_inv', 'rating_diff', 'form_diff', 'h_inv_rank', 'h_squad_rating', 'h_recent_form', 'squad_rank_interaction', 'rating_delta_form']
     data = data.dropna(subset=features + ['target'])
     
     X = data[features]

@@ -61,11 +61,13 @@ def predict_match(home, away, date, model, rankings, results, squad_dict):
             'form_diff': h_f - a_f,
             'h_inv_rank': h_ir,
             'h_squad_rating': h_sr,
-            'h_recent_form': h_f
+            'h_recent_form': h_f,
+            'squad_rank_interaction': h_sr * h_ir,
+            'rating_delta_form': (h_sr - a_sr) * h_f
         }])
         return df.fillna(0)
 
-    # Bi-directional prediction to normalize Home/Away bias
+    # Bi-directional prediction
     f1 = get_features(h_ir, h_sr, h_f, a_ir, a_sr, a_f)
     p1 = model.predict_proba(f1)[0][1]
     
@@ -73,6 +75,12 @@ def predict_match(home, away, date, model, rankings, results, squad_dict):
     p2 = model.predict_proba(f2)[0][1]
     
     avg_p = (p1 + (1 - p2)) / 2
+    
+    # Apply Squad Superiority Bias (User Request)
+    # Every 1 point of rating delta adds 3% to the win probability (more weighted)
+    squad_bias = (h_sr - a_sr) * 0.03
+    avg_p = np.clip(avg_p + squad_bias, 0.01, 0.99)
+    
     return avg_p
 
 def simulate_group(teams, date, model, rankings, results, squad_dict):
