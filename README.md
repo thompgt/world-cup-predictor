@@ -1,5 +1,7 @@
 # 🏆 2026 FIFA World Cup Predictor
 
+![2026 World Cup Bracket Preview](assets/bracket_2026.png)
+
 [![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/)
 [![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-Latest-orange.svg)](https://scikit-learn.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
