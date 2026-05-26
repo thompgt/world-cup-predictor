@@ -1,0 +1,78 @@
+import pandas as pd
+
+def generate_squad_ratings():
+    # Mocked EA FC 26 Average Squad Ratings for National Teams
+    # Top teams usually range from 80-86
+    ratings = {
+        'Argentina': 86,
+        'France': 85,
+        'England': 85,
+        'Brazil': 84,
+        'Belgium': 83,
+        'Portugal': 84,
+        'Netherlands': 83,
+        'Spain': 84,
+        'Italy': 82,
+        'Croatia': 82,
+        'Uruguay': 81,
+        'Germany': 83,
+        'Morocco': 80,
+        'Switzerland': 79,
+        'USA': 78,
+        'United States': 78,
+        'Mexico': 78,
+        'Colombia': 80,
+        'Senegal': 79,
+        'Japan': 78,
+        'South Korea': 77,
+        'Korea Republic': 77,
+        'Austria': 78,
+        'Denmark': 79,
+        'Norway': 78,
+        'Sweden': 77,
+        'Turkey': 77,
+        'Ukraine': 77,
+        'Scotland': 76,
+        'Poland': 77,
+        'Hungary': 76,
+        'Serbia': 77,
+        'Canada': 75,
+        'Egypt': 76,
+        'Algeria': 76,
+        'Tunisia': 74,
+        'Nigeria': 78,
+        'Cameroon': 76,
+        'Ivory Coast': 78,
+        "Côte d'Ivoire": 78,
+        'Ecuador': 77,
+        'Peru': 75,
+        'Chile': 76,
+        'Paraguay': 75,
+        'Australia': 74,
+        'Saudi Arabia': 73,
+        'IR Iran': 75,
+        'Iran': 75,
+        'Iraq': 71,
+        'Qatar': 72,
+        'Uzbekistan': 71,
+        'Panama': 70,
+        'Haiti': 68,
+        'Curaçao': 68,
+        'Jordan': 69,
+        'South Africa': 72,
+        'DR Congo': 73,
+        'Congo DR': 73,
+        'Cape Verde': 73,
+        'Cabo Verde': 73,
+        'Czech Republic': 77,
+        'Czechia': 77,
+        'New Zealand': 69,
+        'Bosnia and Herzegovina': 74,
+    }
+    
+    df = pd.DataFrame(list(ratings.items()), columns=['team', 'squad_rating'])
+    df.to_csv('world-cup-predictor/data/processed/squad_ratings.csv', index=False)
+    print("Mocked EA FC 26 Squad Ratings saved.")
+
+if __name__ == "__main__":
+    generate_squad_ratings()

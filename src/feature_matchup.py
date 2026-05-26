@@ -44,7 +44,11 @@ def engineer_matchup_diffs():
     
     # Feature: Rank difference
     results['rank_diff'] = results['home_rank'] - results['away_rank']
+    results['average_rank'] = (results['home_rank'] + results['away_rank']) / 2
     results['point_diff'] = results['home_points'] - results['away_points']
+    
+    # Feature: Tournament type (Friendly vs Competitive)
+    results['is_friendly'] = (results['tournament'] == 'Friendly').astype(int)
     
     # Feature: Goal rolling difference
     results['goals_rolling_diff'] = results['home_rolling_goals'] - results['away_rolling_goals']
