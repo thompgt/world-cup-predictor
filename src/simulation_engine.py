@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import pickle
 import os
+import collections
+import random
 
 # Standardization mapping
 mapping = {
@@ -83,23 +85,111 @@ def predict_match(home, away, date, model, rankings, results, squad_dict):
     
     return avg_p
 
-def simulate_group(teams, date, model, rankings, results, squad_dict):
+
+def load_rosters(base_path):
+    rosters_path = f"{base_path}/data/fifa_players/rosters.csv"
+    roster_map = {}
+    if os.path.exists(rosters_path):
+        df = pd.read_csv(rosters_path)
+        # expected columns: team,player,position,weight (optional)
+        for team, g in df.groupby('team'):
+            players = []
+            for _, r in g.iterrows():
+                weight = r.get('weight', 1.0) if 'weight' in r.index else 1.0
+                players.append({'player': r['player'], 'position': r.get('position', ''), 'weight': float(weight)})
+            roster_map[team] = players
+    return roster_map
+
+
+def build_historical_scorers_map(base_path):
+    path = f"{base_path}/data/goalscorers.csv"
+    if not os.path.exists(path):
+        return {}
+    gdf = pd.read_csv(path)
+    # use recent history more by weighting later dates slightly higher
+    if 'date' in gdf.columns:
+        try:
+            gdf['date'] = pd.to_datetime(gdf['date'])
+            gdf = gdf.sort_values('date')
+            gdf['time_weight'] = np.linspace(0.5, 1.5, len(gdf))
+        except Exception:
+            gdf['time_weight'] = 1.0
+    else:
+        gdf['time_weight'] = 1.0
+
+    scorer_map = {}
+    for team, g in gdf.groupby('team'):
+        counts = {}
+        for _, r in g.iterrows():
+            name = r['scorer']
+            w = r.get('time_weight', 1.0)
+            counts[name] = counts.get(name, 0) + w
+        scorer_map[team] = counts
+    return scorer_map
+
+
+def select_scorers(team, n_goals, roster_map, hist_scorer_map):
+    choices = []
+    if team in roster_map and roster_map[team]:
+        players = roster_map[team]
+        weights = [p.get('weight', 1.0) for p in players]
+        names = [p['player'] for p in players]
+        # sample with replacement
+        choices = random.choices(names, weights=weights, k=n_goals)
+    elif team in hist_scorer_map and hist_scorer_map[team]:
+        names = list(hist_scorer_map[team].keys())
+        weights = list(hist_scorer_map[team].values())
+        choices = random.choices(names, weights=weights, k=n_goals)
+    else:
+        # fallback synthetic attackers
+        choices = [f"Attacker_{i+1}_{team}" for i in range(n_goals)]
+    return choices
+
+def simulate_group(teams, date, model, rankings, results, squad_dict, roster_map=None, hist_scorer_map=None, scorer_counts=None, match_events=None):
+    if roster_map is None: roster_map = {}
+    if hist_scorer_map is None: hist_scorer_map = {}
+    if scorer_counts is None: scorer_counts = collections.defaultdict(int)
+    if match_events is None: match_events = []
+
     standings = {team: {'points': 0, 'wins': 0, 'draws': 0, 'losses': 0, 'prob_sum': 0} for team in teams}
     for i in range(len(teams)):
         for j in range(i + 1, len(teams)):
             t1, t2 = teams[i], teams[j]
             p = predict_match(t1, t2, date, model, rankings, results, squad_dict)
-            if p > 0.55:
+
+            # use squad ratings to influence expected goals
+            _, h_sr, _ = get_current_features(t1, date, rankings, results, squad_dict)
+            _, a_sr, _ = get_current_features(t2, date, rankings, results, squad_dict)
+            base_lambda = 1.1
+            h_lambda = max(0.05, base_lambda + (h_sr - a_sr) / 10.0 + (p - 0.5))
+            a_lambda = max(0.05, base_lambda + (a_sr - h_sr) / 10.0 + ((1 - p) - 0.5))
+
+            h_goals = int(np.random.poisson(h_lambda))
+            a_goals = int(np.random.poisson(a_lambda))
+
+            # assign scorers
+            h_scorers = select_scorers(t1, h_goals, roster_map, hist_scorer_map) if h_goals > 0 else []
+            a_scorers = select_scorers(t2, a_goals, roster_map, hist_scorer_map) if a_goals > 0 else []
+            for s in h_scorers: scorer_counts[s] += 1
+            for s in a_scorers: scorer_counts[s] += 1
+
+            # determine points from goals
+            if h_goals > a_goals:
                 standings[t1]['points'] += 3; standings[t1]['wins'] += 1; standings[t2]['losses'] += 1
-            elif p < 0.45:
+            elif a_goals > h_goals:
                 standings[t2]['points'] += 3; standings[t2]['wins'] += 1; standings[t1]['losses'] += 1
             else:
                 standings[t1]['points'] += 1; standings[t1]['draws'] += 1
                 standings[t2]['points'] += 1; standings[t2]['draws'] += 1
+
             standings[t1]['prob_sum'] += p
             standings[t2]['prob_sum'] += (1 - p)
+
+            match_events.append({'date': date, 'home': t1, 'away': t2, 'home_goals': h_goals, 'away_goals': a_goals,
+                                 'home_scorers': h_scorers, 'away_scorers': a_scorers, 'prob_home_win': p})
+
     sorted_teams = sorted(teams, key=lambda x: (standings[x]['points'], standings[x]['prob_sum']), reverse=True)
-    return sorted_teams, standings
+    return sorted_teams, standings, scorer_counts, match_events
 
 def run_simulation():
     current_dir = os.getcwd()
@@ -153,35 +243,85 @@ def run_simulation():
     group_results = {}
     third_places = []
     
+    # load rosters and historical scorers
+    roster_map = load_rosters(base_path)
+    hist_scorer_map = build_historical_scorers_map(base_path)
+    scorer_counts = collections.defaultdict(int)
+    match_events = []
+
     for i, g in enumerate(groups):
         g_name = chr(65 + i)
-        winners, standings = simulate_group(g, wc_start_date, model, rankings, results, squad_dict)
+        winners, standings, scorer_counts, match_events = simulate_group(g, wc_start_date, model, rankings, results, squad_dict,
+                                                                          roster_map=roster_map, hist_scorer_map=hist_scorer_map,
+                                                                          scorer_counts=scorer_counts, match_events=match_events)
         group_results[g_name] = {'winners': winners, 'standings': standings}
         third_team = winners[2]
         third_places.append({'team': third_team, 'group': g_name, 'points': standings[third_team]['points'], 'prob_sum': standings[third_team]['prob_sum']})
-        
+
     best_thirds = sorted(third_places, key=lambda x: (x['points'], x['prob_sum']), reverse=True)[:8]
     best_third_teams = [x['team'] for x in best_thirds]
-    
+
     group_winners = [group_results[g]['winners'][0] for g in 'ABCDEFGHIJKL']
     group_runners_up = [group_results[g]['winners'][1] for g in 'ABCDEFGHIJKL']
-    
+
     bracket = []
     for i in range(8): bracket.append((group_winners[i], best_third_teams[i]))
     for i in range(8, 12): bracket.append((group_winners[i], group_runners_up[i-8]))
     for i in range(4, 12, 2): bracket.append((group_runners_up[i], group_runners_up[i+1]))
-        
-    def simulate_ko(matchup, date, model, rankings, results, squad_dict):
+
+    def simulate_ko(matchup, date, model, rankings, results, squad_dict, roster_map=None, hist_scorer_map=None, scorer_counts=None, match_events=None):
+        if roster_map is None: roster_map = {}
+        if hist_scorer_map is None: hist_scorer_map = {}
+        if scorer_counts is None: scorer_counts = collections.defaultdict(int)
+        if match_events is None: match_events = []
+
         p = predict_match(matchup[0], matchup[1], date, model, rankings, results, squad_dict)
-        winner = matchup[0] if p > 0.5 else matchup[1]
-        return winner, p if winner == matchup[0] else 1-p
+
+        # expected goals similar to group
+        _, h_sr, _ = get_current_features(matchup[0], date, rankings, results, squad_dict)
+        _, a_sr, _ = get_current_features(matchup[1], date, rankings, results, squad_dict)
+        base_lambda = 1.1
+        h_lambda = max(0.05, base_lambda + (h_sr - a_sr) / 10.0 + (p - 0.5))
+        a_lambda = max(0.05, base_lambda + (a_sr - h_sr) / 10.0 + ((1 - p) - 0.5))
+
+        h_goals = int(np.random.poisson(h_lambda))
+        a_goals = int(np.random.poisson(a_lambda))
+
+        h_scorers = select_scorers(matchup[0], h_goals, roster_map, hist_scorer_map) if h_goals > 0 else []
+        a_scorers = select_scorers(matchup[1], a_goals, roster_map, hist_scorer_map) if a_goals > 0 else []
+        for s in h_scorers: scorer_counts[s] += 1
+        for s in a_scorers: scorer_counts[s] += 1
+
+        # decide winner (if tie, use probability to break)
+        if h_goals > a_goals:
+            winner = matchup[0]; win_prob = p
+        elif a_goals > h_goals:
+            winner = matchup[1]; win_prob = 1-p
+        else:
+            # tie -> decide by p (or coin flip if exactly 0.5)
+            if p > 0.5:
+                winner = matchup[0]; win_prob = p
+            elif p < 0.5:
+                winner = matchup[1]; win_prob = 1-p
+            else:
+                winner = random.choice(list(matchup)); win_prob = 0.5
+
+        match_events.append({'date': date, 'home': matchup[0], 'away': matchup[1], 'home_goals': h_goals, 'away_goals': a_goals,
+                             'home_scorers': h_scorers, 'away_scorers': a_scorers, 'prob_home_win': p})
+
+        return winner, win_prob, scorer_counts, match_events
 
     knockout_data = []
     next_round = []
     for m in bracket:
-        winner, prob = simulate_ko(m, wc_start_date + pd.Timedelta(days=20), model, rankings, results, squad_dict)
+        winner, prob, scorer_counts, match_events = simulate_ko(m, wc_start_date + pd.Timedelta(days=20), model, rankings, results, squad_dict,
+                                                                 roster_map=roster_map, hist_scorer_map=hist_scorer_map,
+                                                                 scorer_counts=scorer_counts, match_events=match_events)
         next_round.append(winner)
-        knockout_data.append({'Round': 'R32', 'Matchup': m, 'Winner': winner, 'Prob': prob})
+        # include scorers in KO records
+        last_event = match_events[-1] if match_events else {}
+        knockout_data.append({'Round': 'R32', 'Matchup': m, 'Winner': winner, 'Prob': prob,
+                              'Home_Scorers': last_event.get('home_scorers', []), 'Away_Scorers': last_event.get('away_scorers', [])})
 
     rounds = ["Round of 16", "Quarter-finals", "Semi-finals", "Final"]
     curr = next_round
@@ -189,11 +329,27 @@ def run_simulation():
         winners = []
         for i in range(0, len(curr), 2):
             m = (curr[i], curr[i+1])
-            winner, prob = simulate_ko(m, wc_start_date + pd.Timedelta(days=30), model, rankings, results, squad_dict)
+            winner, prob, scorer_counts, match_events = simulate_ko(m, wc_start_date + pd.Timedelta(days=30), model, rankings, results, squad_dict,
+                                                                     roster_map=roster_map, hist_scorer_map=hist_scorer_map,
+                                                                     scorer_counts=scorer_counts, match_events=match_events)
             winners.append(winner)
-            knockout_data.append({'Round': round_name, 'Matchup': m, 'Winner': winner, 'Prob': prob})
+            last_event = match_events[-1] if match_events else {}
+            knockout_data.append({'Round': round_name, 'Matchup': m, 'Winner': winner, 'Prob': prob,
+                                  'Home_Scorers': last_event.get('home_scorers', []), 'Away_Scorers': last_event.get('away_scorers', [])})
         curr = winners
         if len(curr) == 1: break
+
+    # write projected scorers summary
+    try:
+        assets_dir = f"{base_path}/assets"
+        os.makedirs(assets_dir, exist_ok=True)
+        scorers_df = pd.DataFrame(sorted(scorer_counts.items(), key=lambda x: x[1], reverse=True), columns=['scorer', 'projected_goals'])
+        scorers_df.to_csv(f"{assets_dir}/projected_scorers.csv", index=False)
+        # detailed match events
+        me_df = pd.DataFrame(match_events)
+        me_df.to_json(f"{assets_dir}/match_scorers.json", orient='records', date_format='iso')
+    except Exception:
+        pass
 
     return group_results, best_third_teams, knockout_data
 
