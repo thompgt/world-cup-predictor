@@ -27,7 +27,9 @@ rosters = {
 
 def get_scorers_list(team, num_goals):
     if num_goals == 0: return []
-    players_raw = rosters.get(team, [("Squad Member", 0.4), ("Attacker", 0.3), ("Midfielder", 0.2), ("Defender", 0.1)])
+    players_raw = rosters.get(team, [])
+    if not players_raw:
+        return []
     names = [p[0] for p in players_raw]
     weights = [p[1] for p in players_raw]
     return random.choices(names, weights=weights, k=num_goals)

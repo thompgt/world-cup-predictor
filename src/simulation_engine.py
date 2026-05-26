@@ -20,6 +20,11 @@ mapping = {
     'Kyrgyzstan': 'Kyrgyz Republic',
 }
 
+
+def _is_generic_scorer_name(name):
+    lowered = str(name).strip().lower()
+    return lowered in {'attacker', 'midfielder', 'defender', 'squad member', 'squad player'} or lowered.startswith('attacker_')
+
 def get_current_features(team, date, rankings, results, squad_dict):
     # 1. Inverted Rank (212 - rank)
     team_ranks = rankings[rankings['team'] == team]
@@ -98,6 +103,16 @@ def load_rosters(base_path):
                 weight = r.get('weight', 1.0) if 'weight' in r.index else 1.0
                 players.append({'player': r['player'], 'position': r.get('position', ''), 'weight': float(weight)})
             roster_map[team] = players
+    else:
+        try:
+            from granular_engine import rosters as fallback_rosters
+            for team, players_raw in fallback_rosters.items():
+                roster_map[team] = [
+                    {'player': player, 'position': '', 'weight': float(weight)}
+                    for player, weight in players_raw
+                ]
+        except Exception:
+            pass
     return roster_map
 
 
@@ -122,6 +137,8 @@ def build_historical_scorers_map(base_path):
         counts = {}
         for _, r in g.iterrows():
             name = r['scorer']
+            if _is_generic_scorer_name(name):
+                continue
             w = r.get('time_weight', 1.0)
             counts[name] = counts.get(name, 0) + w
         scorer_map[team] = counts
@@ -129,21 +146,17 @@ def build_historical_scorers_map(base_path):
 
 
 def select_scorers(team, n_goals, roster_map, hist_scorer_map):
-    choices = []
     if team in roster_map and roster_map[team]:
         players = roster_map[team]
         weights = [p.get('weight', 1.0) for p in players]
         names = [p['player'] for p in players]
         # sample with replacement
-        choices = random.choices(names, weights=weights, k=n_goals)
+        return random.choices(names, weights=weights, k=n_goals)
     elif team in hist_scorer_map and hist_scorer_map[team]:
         names = list(hist_scorer_map[team].keys())
         weights = list(hist_scorer_map[team].values())
-        choices = random.choices(names, weights=weights, k=n_goals)
-    else:
-        # fallback synthetic attackers
-        choices = [f"Attacker_{i+1}_{team}" for i in range(n_goals)]
-    return choices
+        return random.choices(names, weights=weights, k=n_goals)
+    return []
 
 def simulate_group(teams, date, model, rankings, results, squad_dict, roster_map=None, hist_scorer_map=None, scorer_counts=None, match_events=None):
     if roster_map is None: roster_map = {}
@@ -270,6 +283,17 @@ def run_simulation():
     # load rosters and historical scorers
     roster_map = load_rosters(base_path)
     hist_scorer_map = build_historical_scorers_map(base_path)
+    valid_players = {player['player'] for players in roster_map.values() for player in players}
+    for team in list(hist_scorer_map.keys()):
+        filtered = {
+            name: weight
+            for name, weight in hist_scorer_map[team].items()
+            if name in valid_players and not _is_generic_scorer_name(name)
+        }
+        if filtered:
+            hist_scorer_map[team] = filtered
+        else:
+            hist_scorer_map.pop(team, None)
     scorer_counts = collections.defaultdict(int)
     match_events = []
 
