@@ -25,22 +25,14 @@ rosters = {
     "South Korea": [("Son Heung-min", 0.4), ("Hwang Hee-chan", 0.3), ("Lee Kang-in", 0.2), ("Cho Gue-sung", 0.1)],
 }
 
-def get_scorers(team, num_goals):
-    if num_goals == 0: return ""
+def get_scorers_list(team, num_goals):
+    if num_goals == 0: return []
     players_raw = rosters.get(team, [("Squad Member", 0.4), ("Attacker", 0.3), ("Midfielder", 0.2), ("Defender", 0.1)])
     names = [p[0] for p in players_raw]
     weights = [p[1] for p in players_raw]
-    
-    # Selection with slight noise (allow other squad members)
-    scorers = random.choices(names, weights=weights, k=num_goals)
-    
-    formatted = []
-    for s in scorers:
-        formatted.append(f"{s} ({random.randint(2, 89)}')")
-    return ", ".join(formatted)
+    return random.choices(names, weights=weights, k=num_goals)
 
 def simulate_match_detail(home, away, model, rankings, results, squad_dict, date, is_ko=False):
-    # Dynamic imports to avoid issues in notebook execution
     import pandas as pd
     from simulation_engine import predict_match
     
@@ -58,10 +50,20 @@ def simulate_match_detail(home, away, model, rankings, results, squad_dict, date
         if p > 0.5: h_goals += 1
         else: a_goals += 1
         
+    h_scorers = get_scorers_list(home, h_goals)
+    a_scorers = get_scorers_list(away, a_goals)
+    
     return {
         "Match": f"{home} vs {away}",
+        "Home": home,
+        "Away": away,
         "Win Prob": round(p, 2),
+        "Home Goals": h_goals,
+        "Away Goals": a_goals,
         "Score": f"{h_goals} - {a_goals}",
-        "Scorers": f"{home}: {get_scorers(home, h_goals)} | {away}: {get_scorers(away, a_goals)}",
-        "Winner": home if h_goals > a_goals else away
+        "Home Scorers": h_scorers,
+        "Away Scorers": a_scorers,
+        "Winner": home if h_goals > a_goals else away,
+        "Clean Sheet Home": 1 if a_goals == 0 else 0,
+        "Clean Sheet Away": 1 if h_goals == 0 else 0
     }
