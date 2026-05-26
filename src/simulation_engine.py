@@ -62,6 +62,9 @@ def predict_match(home, away, date, model, rankings, results):
     h_rank, h_pts, h_roll, h_strk, h_opp_r = get_current_features(home, date, rankings, results)
     a_rank, a_pts, a_roll, a_strk, a_opp_r = get_current_features(away, date, rankings, results)
     
+    # Prediction weight
+    match_w = 1.5
+
     def get_features(h_r, h_p, h_rl, h_s, h_or, a_r, a_p, a_rl, a_s, a_or):
         df = pd.DataFrame([{
             'rank_diff': h_r - a_r,
@@ -70,7 +73,8 @@ def predict_match(home, away, date, model, rankings, results):
             'is_friendly': 0,
             'goals_rolling_diff': h_rl - a_rl,
             'streak_diff': h_s - a_s,
-            'opp_rank_diff': h_or - a_or
+            'opp_rank_diff': h_or - a_or,
+            'match_weight': match_w
         }])
         return df.fillna(0)
 
@@ -118,8 +122,10 @@ def run_simulation():
     else:
         base_path = 'world-cup-predictor'
 
-    # Use advanced model if available
-    model_path = f'{base_path}/models/advanced_gb.pkl'
+    # Preference order: weighted -> advanced -> optimized
+    model_path = f'{base_path}/models/weighted_gb.pkl'
+    if not os.path.exists(model_path):
+        model_path = f'{base_path}/models/advanced_gb.pkl'
     if not os.path.exists(model_path):
         model_path = f'{base_path}/models/optimized_gb.pkl'
         
@@ -127,7 +133,6 @@ def run_simulation():
         model = pickle.load(f)
     
     rankings = pd.read_csv(f'{base_path}/data/processed/rankings_2026_cycle.csv')
-    # Add rank if missing for internal calculation
     if 'rank' not in rankings.columns:
         rankings = rankings.sort_values(['date', 'total_points'], ascending=[True, False])
         rankings['rank'] = rankings.groupby('date')['total_points'].rank(ascending=False, method='min')
@@ -193,29 +198,24 @@ def run_simulation():
         return winner, p if winner == matchup[0] else 1-p
 
     knockout_data = []
-    print("\n--- Round of 32 ---")
     next_round = []
     for m in bracket:
         winner, prob = simulate_knockout(m, wc_start_date + pd.Timedelta(days=20), model, rankings, results)
         next_round.append(winner)
         knockout_data.append({'Round': 'R32', 'Matchup': m, 'Winner': winner, 'Prob': prob})
-        print(f"{m[0]} vs {m[1]} -> Winner: {winner} ({prob:.2f})")
 
     rounds = ["Round of 16", "Quarter-finals", "Semi-finals", "Final"]
     current_teams = next_round
     
     for round_name in rounds:
-        print(f"\n--- {round_name} ---")
         winners = []
         for i in range(0, len(current_teams), 2):
             m = (current_teams[i], current_teams[i+1])
             winner, prob = simulate_knockout(m, wc_start_date + pd.Timedelta(days=30), model, rankings, results)
             winners.append(winner)
             knockout_data.append({'Round': round_name, 'Matchup': m, 'Winner': winner, 'Prob': prob})
-            print(f"{m[0]} vs {m[1]} -> Winner: {winner} ({prob:.2f})")
         current_teams = winners
         if len(current_teams) == 1:
-            print(f"\nWORLD CUP WINNER: {current_teams[0]}")
             break
 
     return group_results, best_third_teams, knockout_data
