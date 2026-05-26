@@ -103,16 +103,28 @@ def run_simulation():
     with open(model_path, 'rb') as f:
         model = pickle.load(f)
     
-    rankings = pd.read_csv(f'{base_path}/data/processed/rankings_2026_cycle.csv')
-    if 'rank' not in rankings.columns:
-        rankings = rankings.sort_values(['date', 'total_points'], ascending=[True, False])
-        rankings['rank'] = rankings.groupby('date')['total_points'].rank(ascending=False, method='min')
+    # Load LIVE rankings
+    rankings = pd.read_csv(f'{base_path}/data/fifa_ranking_live.csv')
     results = pd.read_csv(f'{base_path}/data/processed/results_2026_cycle.csv')
     squad_ratings = pd.read_csv(f'{base_path}/data/processed/squad_ratings.csv')
     squad_dict = dict(zip(squad_ratings['team'], squad_ratings['squad_rating']))
 
-    rankings['date'] = pd.to_datetime(rankings['date'])
     results['date'] = pd.to_datetime(results['date'])
+    
+    # Standardize column name in live rankings to 'total_points' for compatibility if needed, 
+    # but the engine currently uses 'rank' and 'total_points'. 
+    # In live csv it is 'rank' and 'points'.
+    if 'total_points' not in rankings.columns:
+        rankings = rankings.rename(columns={'points': 'total_points'})
+    
+    # Ensure rank is present
+    if 'rank' not in rankings.columns:
+        rankings = rankings.sort_values(['total_points'], ascending=False)
+        rankings['rank'] = rankings['total_points'].rank(ascending=False, method='min')
+
+    # Since it is a live snapshot, we treat all entries as 'latest'
+    rankings['date'] = pd.to_datetime('2026-05-25') 
+
     
     groups = [
         ['Algeria', 'Argentina', 'Austria', 'Jordan'],

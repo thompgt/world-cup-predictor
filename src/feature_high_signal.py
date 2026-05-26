@@ -5,27 +5,29 @@ import os
 def engineer_high_signal_features():
     # Load data
     results = pd.read_csv('world-cup-predictor/data/processed/results_2026_cycle.csv')
-    rankings = pd.read_csv('world-cup-predictor/data/processed/rankings_2026_cycle.csv')
+    # Use Live Rankings for the latest indicator, but merge with historical for temporal depth
+    rankings_live = pd.read_csv('world-cup-predictor/data/fifa_ranking_live.csv')
+    rankings_hist = pd.read_csv('world-cup-predictor/data/processed/rankings_2026_cycle.csv')
     squad_ratings = pd.read_csv('world-cup-predictor/data/processed/squad_ratings.csv')
     
     results['date'] = pd.to_datetime(results['date'])
-    rankings['date'] = pd.to_datetime(rankings['date'])
+    rankings_hist['date'] = pd.to_datetime(rankings_hist['date'])
     
-    # Sort
-    results = results.sort_values('date')
-    rankings = rankings.sort_values(['team', 'date'])
-    
-    # Convert squad ratings to dict
+    # Create a mapping of team -> current live rank
+    live_rank_dict = dict(zip(rankings_live['team'], rankings_live['rank']))
     squad_dict = dict(zip(squad_ratings['team'], squad_ratings['squad_rating']))
 
     def get_rank_at_date(team, date):
-        team_ranks = rankings[rankings['team'] == team]
-        if team_ranks.empty: return 100
+        # Prefer historical rank for training to capture point in time
+        team_ranks = rankings_hist[rankings_hist['team'] == team]
+        if team_ranks.empty:
+            return live_rank_dict.get(team, 100)
         past_ranks = team_ranks[team_ranks['date'] <= date]
-        if past_ranks.empty: return team_ranks.iloc[0]['rank']
+        if past_ranks.empty:
+            return team_ranks.iloc[0]['rank']
         return past_ranks.iloc[-1]['rank']
 
-    print("Calculating high-signal features...")
+    print("Calculating high-signal features with LIVE rankings...")
     teams = set(results['home_team'].unique()) | set(results['away_team'].unique())
     team_history = {team: [] for team in teams}
     
